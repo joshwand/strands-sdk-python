@@ -1,4 +1,10 @@
-"""Data models for session management."""
+"""Data models for session management.
+
+This module defines the data models used by session managers (e.g., S3SessionManager,
+FileSessionManager) to persist and restore agent conversations. It includes transparent
+base64 encoding/decoding of binary data (such as image, document, and video content)
+to enable JSON serialization of messages containing bytes fields.
+"""
 
 import base64
 import inspect
@@ -26,9 +32,18 @@ class SessionType(str, Enum):
 
 
 def encode_bytes_values(obj: Any) -> Any:
-    """Recursively encode any bytes values in an object to base64.
+    """Recursively encode any bytes values in an object to base64 for JSON serialization.
 
-    Handles dictionaries, lists, and nested structures.
+    This function enables JSON serialization of objects containing binary data such as
+    media content (images, documents, videos) and redacted reasoning content. Each bytes
+    value is replaced with a sentinel dict ``{"__bytes_encoded__": True, "data": "<base64>"}``.
+
+    Args:
+        obj: The object to encode. Can be a bytes, dict, list, or any other type.
+
+    Returns:
+        A JSON-serializable copy of the input with all bytes values replaced by
+        base64-encoded sentinel dicts.
     """
     if isinstance(obj, bytes):
         return {"__bytes_encoded__": True, "data": base64.b64encode(obj).decode()}
@@ -41,9 +56,17 @@ def encode_bytes_values(obj: Any) -> Any:
 
 
 def decode_bytes_values(obj: Any) -> Any:
-    """Recursively decode any base64-encoded bytes values in an object.
+    """Recursively decode base64-encoded bytes values back to bytes after JSON deserialization.
 
-    Handles dictionaries, lists, and nested structures.
+    This function reverses the encoding performed by :func:`encode_bytes_values`, restoring
+    sentinel dicts ``{"__bytes_encoded__": True, "data": "<base64>"}`` back to their
+    original bytes values.
+
+    Args:
+        obj: The object to decode. Can be a dict, list, or any other type.
+
+    Returns:
+        A copy of the input with all base64-encoded sentinel dicts restored to bytes.
     """
     if isinstance(obj, dict):
         if obj.get("__bytes_encoded__") is True and "data" in obj:
@@ -95,12 +118,30 @@ class SessionMessage:
 
     @classmethod
     def from_dict(cls, env: dict[str, Any]) -> "SessionMessage":
-        """Initialize a SessionMessage from a dictionary, ignoring keys that are not class parameters."""
+        """Initialize a SessionMessage from a dictionary, decoding base64-encoded bytes values.
+
+        Handles deserialization of messages containing binary data (e.g., images, documents,
+        videos, redacted reasoning content) that was previously encoded by :meth:`to_dict`.
+
+        Args:
+            env: Dictionary representation of a SessionMessage, typically loaded from JSON.
+
+        Returns:
+            A SessionMessage with all base64-encoded bytes values restored to bytes.
+        """
         extracted_relevant_parameters = {k: v for k, v in env.items() if k in inspect.signature(cls).parameters}
         return cls(**decode_bytes_values(extracted_relevant_parameters))
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert the SessionMessage to a dictionary representation."""
+        """Convert the SessionMessage to a JSON-serializable dictionary.
+
+        Encodes all bytes values (e.g., media content from images, documents, videos, and
+        redacted reasoning content) to base64 so the result can be safely passed to
+        ``json.dumps``.
+
+        Returns:
+            A dictionary representation with all bytes values base64-encoded.
+        """
         return encode_bytes_values(asdict(self))  # type: ignore
 
 

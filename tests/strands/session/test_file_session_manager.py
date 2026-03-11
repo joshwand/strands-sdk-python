@@ -501,3 +501,195 @@ def test_create_session_multi_agent_directory_structure(multi_agent_manager, sam
 
     assert os.path.exists(session_dir)
     assert os.path.exists(multi_agents_dir)
+
+
+def test_create_and_read_message_with_image_bytes(file_manager, sample_session, sample_agent):
+    """Test creating and reading a message with image bytes through filesystem."""
+    file_manager.create_session(sample_session)
+    file_manager.create_agent(sample_session.session_id, sample_agent)
+
+    image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+    session_message = SessionMessage.from_message(
+        message={
+            "role": "user",
+            "content": [
+                ContentBlock(
+                    image={
+                        "format": "png",
+                        "source": {"bytes": image_bytes},
+                    }
+                )
+            ],
+        },
+        index=0,
+    )
+
+    file_manager.create_message(sample_session.session_id, sample_agent.agent_id, session_message)
+    result = file_manager.read_message(sample_session.session_id, sample_agent.agent_id, 0)
+
+    assert result.message["content"][0]["image"]["source"]["bytes"] == image_bytes
+    assert result.message["content"][0]["image"]["format"] == "png"
+
+
+def test_create_and_read_message_with_document_bytes(file_manager, sample_session, sample_agent):
+    """Test creating and reading a message with document bytes through filesystem."""
+    file_manager.create_session(sample_session)
+    file_manager.create_agent(sample_session.session_id, sample_agent)
+
+    doc_bytes = b"%PDF-1.4 fake pdf content"
+    session_message = SessionMessage.from_message(
+        message={
+            "role": "user",
+            "content": [
+                ContentBlock(
+                    document={
+                        "format": "pdf",
+                        "name": "test.pdf",
+                        "source": {"bytes": doc_bytes},
+                    }
+                )
+            ],
+        },
+        index=0,
+    )
+
+    file_manager.create_message(sample_session.session_id, sample_agent.agent_id, session_message)
+    result = file_manager.read_message(sample_session.session_id, sample_agent.agent_id, 0)
+
+    assert result.message["content"][0]["document"]["source"]["bytes"] == doc_bytes
+    assert result.message["content"][0]["document"]["format"] == "pdf"
+    assert result.message["content"][0]["document"]["name"] == "test.pdf"
+
+
+def test_create_and_read_message_with_video_bytes(file_manager, sample_session, sample_agent):
+    """Test creating and reading a message with video bytes through filesystem."""
+    file_manager.create_session(sample_session)
+    file_manager.create_agent(sample_session.session_id, sample_agent)
+
+    video_bytes = b"\x00\x00\x00\x1cftypisom\x00\x00\x02\x00"
+    session_message = SessionMessage.from_message(
+        message={
+            "role": "user",
+            "content": [
+                ContentBlock(
+                    video={
+                        "format": "mp4",
+                        "source": {"bytes": video_bytes},
+                    }
+                )
+            ],
+        },
+        index=0,
+    )
+
+    file_manager.create_message(sample_session.session_id, sample_agent.agent_id, session_message)
+    result = file_manager.read_message(sample_session.session_id, sample_agent.agent_id, 0)
+
+    assert result.message["content"][0]["video"]["source"]["bytes"] == video_bytes
+    assert result.message["content"][0]["video"]["format"] == "mp4"
+
+
+def test_create_and_read_message_with_reasoning_redacted_bytes(file_manager, sample_session, sample_agent):
+    """Test creating and reading a message with redacted reasoning content bytes through filesystem."""
+    file_manager.create_session(sample_session)
+    file_manager.create_agent(sample_session.session_id, sample_agent)
+
+    redacted_bytes = b"\x01\x02\x03\x04encrypted-reasoning"
+    session_message = SessionMessage.from_message(
+        message={
+            "role": "assistant",
+            "content": [
+                ContentBlock(
+                    reasoningContent={
+                        "redactedContent": redacted_bytes,
+                    }
+                )
+            ],
+        },
+        index=0,
+    )
+
+    file_manager.create_message(sample_session.session_id, sample_agent.agent_id, session_message)
+    result = file_manager.read_message(sample_session.session_id, sample_agent.agent_id, 0)
+
+    assert result.message["content"][0]["reasoningContent"]["redactedContent"] == redacted_bytes
+
+
+def test_create_and_read_message_with_mixed_media_bytes(file_manager, sample_session, sample_agent):
+    """Test creating and reading a message with text, image, document, and video bytes through filesystem."""
+    file_manager.create_session(sample_session)
+    file_manager.create_agent(sample_session.session_id, sample_agent)
+
+    image_bytes = b"\x89PNG-image-data"
+    doc_bytes = b"%PDF-document-data"
+    video_bytes = b"\x00\x00-video-data"
+
+    session_message = SessionMessage.from_message(
+        message={
+            "role": "user",
+            "content": [
+                ContentBlock(text="Here are some files"),
+                ContentBlock(image={"format": "jpeg", "source": {"bytes": image_bytes}}),
+                ContentBlock(document={"format": "txt", "name": "notes.txt", "source": {"bytes": doc_bytes}}),
+                ContentBlock(video={"format": "webm", "source": {"bytes": video_bytes}}),
+            ],
+        },
+        index=0,
+    )
+
+    file_manager.create_message(sample_session.session_id, sample_agent.agent_id, session_message)
+    result = file_manager.read_message(sample_session.session_id, sample_agent.agent_id, 0)
+
+    assert result.message["content"][0]["text"] == "Here are some files"
+    assert result.message["content"][1]["image"]["source"]["bytes"] == image_bytes
+    assert result.message["content"][2]["document"]["source"]["bytes"] == doc_bytes
+    assert result.message["content"][3]["video"]["source"]["bytes"] == video_bytes
+
+
+def test_list_messages_with_binary_content(file_manager, sample_session, sample_agent):
+    """Test listing multiple messages containing binary content through filesystem."""
+    file_manager.create_session(sample_session)
+    file_manager.create_agent(sample_session.session_id, sample_agent)
+
+    for i in range(3):
+        image_bytes = f"image-data-{i}".encode()
+        message = SessionMessage.from_message(
+            message={
+                "role": "user",
+                "content": [
+                    ContentBlock(image={"format": "png", "source": {"bytes": image_bytes}}),
+                ],
+            },
+            index=i,
+        )
+        file_manager.create_message(sample_session.session_id, sample_agent.agent_id, message)
+
+    results = file_manager.list_messages(sample_session.session_id, sample_agent.agent_id)
+
+    assert len(results) == 3
+    for i, result in enumerate(results):
+        expected_bytes = f"image-data-{i}".encode()
+        assert result.message["content"][0]["image"]["source"]["bytes"] == expected_bytes
+
+
+def test_update_message_with_binary_content(file_manager, sample_session, sample_agent):
+    """Test updating a message with binary content through filesystem."""
+    file_manager.create_session(sample_session)
+    file_manager.create_agent(sample_session.session_id, sample_agent)
+
+    original_bytes = b"original-image-data"
+    session_message = SessionMessage.from_message(
+        message={
+            "role": "user",
+            "content": [ContentBlock(image={"format": "png", "source": {"bytes": original_bytes}})],
+        },
+        index=0,
+    )
+    file_manager.create_message(sample_session.session_id, sample_agent.agent_id, session_message)
+
+    updated_bytes = b"updated-image-data"
+    session_message.message["content"] = [ContentBlock(image={"format": "jpeg", "source": {"bytes": updated_bytes}})]
+    file_manager.update_message(sample_session.session_id, sample_agent.agent_id, session_message)
+
+    result = file_manager.read_message(sample_session.session_id, sample_agent.agent_id, 0)
+    assert result.message["content"][0]["image"]["source"]["bytes"] == updated_bytes
