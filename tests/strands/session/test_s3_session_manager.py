@@ -13,6 +13,7 @@ from strands.agent.conversation_manager.null_conversation_manager import NullCon
 from strands.session.s3_session_manager import S3SessionManager
 from strands.types.content import ContentBlock
 from strands.types.exceptions import SessionException
+from strands.types.media import DocumentContent, DocumentSource, ImageContent, ImageSource, VideoContent, VideoSource
 from strands.types.session import Session, SessionAgent, SessionMessage, SessionType
 
 
@@ -494,10 +495,10 @@ def test_create_and_read_message_with_image_bytes(s3_manager, sample_session, sa
             "role": "user",
             "content": [
                 ContentBlock(
-                    image={
-                        "format": "png",
-                        "source": {"bytes": image_bytes},
-                    }
+                    image=ImageContent(
+                        format="png",
+                        source=ImageSource(bytes=image_bytes),
+                    )
                 )
             ],
         },
@@ -522,11 +523,11 @@ def test_create_and_read_message_with_document_bytes(s3_manager, sample_session,
             "role": "user",
             "content": [
                 ContentBlock(
-                    document={
-                        "format": "pdf",
-                        "name": "test.pdf",
-                        "source": {"bytes": doc_bytes},
-                    }
+                    document=DocumentContent(
+                        format="pdf",
+                        name="test.pdf",
+                        source=DocumentSource(bytes=doc_bytes),
+                    )
                 )
             ],
         },
@@ -552,10 +553,10 @@ def test_create_and_read_message_with_video_bytes(s3_manager, sample_session, sa
             "role": "user",
             "content": [
                 ContentBlock(
-                    video={
-                        "format": "mp4",
-                        "source": {"bytes": video_bytes},
-                    }
+                    video=VideoContent(
+                        format="mp4",
+                        source=VideoSource(bytes=video_bytes),
+                    )
                 )
             ],
         },
@@ -609,9 +610,15 @@ def test_create_and_read_message_with_mixed_media_bytes(s3_manager, sample_sessi
             "role": "user",
             "content": [
                 ContentBlock(text="Here are some files"),
-                ContentBlock(image={"format": "jpeg", "source": {"bytes": image_bytes}}),
-                ContentBlock(document={"format": "txt", "name": "notes.txt", "source": {"bytes": doc_bytes}}),
-                ContentBlock(video={"format": "webm", "source": {"bytes": video_bytes}}),
+                ContentBlock(
+                    image=ImageContent(format="jpeg", source=ImageSource(bytes=image_bytes)),
+                ),
+                ContentBlock(
+                    document=DocumentContent(format="txt", name="notes.txt", source=DocumentSource(bytes=doc_bytes)),
+                ),
+                ContentBlock(
+                    video=VideoContent(format="webm", source=VideoSource(bytes=video_bytes)),
+                ),
             ],
         },
         index=0,
@@ -637,7 +644,9 @@ def test_list_messages_with_binary_content(s3_manager, sample_session, sample_ag
             message={
                 "role": "user",
                 "content": [
-                    ContentBlock(image={"format": "png", "source": {"bytes": image_bytes}}),
+                    ContentBlock(
+                        image=ImageContent(format="png", source=ImageSource(bytes=image_bytes)),
+                    ),
                 ],
             },
             index=i,
@@ -661,14 +670,18 @@ def test_update_message_with_binary_content(s3_manager, sample_session, sample_a
     session_message = SessionMessage.from_message(
         message={
             "role": "user",
-            "content": [ContentBlock(image={"format": "png", "source": {"bytes": original_bytes}})],
+            "content": [
+                ContentBlock(image=ImageContent(format="png", source=ImageSource(bytes=original_bytes))),
+            ],
         },
         index=0,
     )
     s3_manager.create_message(sample_session.session_id, sample_agent.agent_id, session_message)
 
     updated_bytes = b"updated-image-data"
-    session_message.message["content"] = [ContentBlock(image={"format": "jpeg", "source": {"bytes": updated_bytes}})]
+    session_message.message["content"] = [
+        ContentBlock(image=ImageContent(format="jpeg", source=ImageSource(bytes=updated_bytes)))
+    ]
     s3_manager.update_message(sample_session.session_id, sample_agent.agent_id, session_message)
 
     result = s3_manager.read_message(sample_session.session_id, sample_agent.agent_id, 0)
