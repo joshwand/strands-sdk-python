@@ -15,7 +15,12 @@ from typing_extensions import TypedDict, Unpack, override
 from ..types.content import ContentBlock, Messages
 from ..types.streaming import StopReason, StreamEvent
 from ..types.tools import ToolChoice, ToolSpec
-from ._validation import _has_location_source, validate_config_keys, warn_on_tool_choice_not_supported
+from ._validation import (
+    _has_location_source,
+    _resolve_location_source,
+    validate_config_keys,
+    warn_on_tool_choice_not_supported,
+)
 from .model import Model
 
 logger = logging.getLogger(__name__)
@@ -163,10 +168,13 @@ class OllamaModel(Model):
         formatted_messages = []
         for message in messages:
             for content in message["content"]:
-                # Check for location sources and skip with warning
+                # Resolve location sources (e.g. S3) to bytes
                 if _has_location_source(content):
-                    logger.warning("Location sources are not supported by Ollama | skipping content block")
-                    continue
+                    try:
+                        content = _resolve_location_source(content)
+                    except Exception:
+                        logger.warning("failed to resolve location source for Ollama | skipping content block")
+                        continue
                 formatted_messages.extend(self._format_request_message_contents(message["role"], content))
 
         return system_message + formatted_messages

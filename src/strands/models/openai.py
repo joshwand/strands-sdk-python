@@ -20,7 +20,7 @@ from ..types.content import ContentBlock, Messages, SystemContentBlock
 from ..types.exceptions import ContextWindowOverflowException, ModelThrottledException
 from ..types.streaming import StreamEvent
 from ..types.tools import ToolChoice, ToolResult, ToolSpec, ToolUse
-from ._validation import _has_location_source, validate_config_keys
+from ._validation import _has_location_source, _resolve_location_source, validate_config_keys
 from .model import Model
 
 logger = logging.getLogger(__name__)
@@ -361,8 +361,11 @@ class OpenAIModel(Model):
                 if any(block_type in content for block_type in ["toolResult", "toolUse", "reasoningContent"]):
                     continue
                 if _has_location_source(content):
-                    logger.warning("Location sources are not supported by OpenAI | skipping content block")
-                    continue
+                    try:
+                        content = _resolve_location_source(content)
+                    except Exception:
+                        logger.warning("failed to resolve location source for OpenAI | skipping content block")
+                        continue
                 filtered_contents.append(content)
 
             formatted_contents = [cls.format_request_message_content(content) for content in filtered_contents]

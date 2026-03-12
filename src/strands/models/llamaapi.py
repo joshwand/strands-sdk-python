@@ -20,7 +20,12 @@ from ..types.content import ContentBlock, Messages
 from ..types.exceptions import ModelThrottledException
 from ..types.streaming import StreamEvent, Usage
 from ..types.tools import ToolChoice, ToolResult, ToolSpec, ToolUse
-from ._validation import _has_location_source, validate_config_keys, warn_on_tool_choice_not_supported
+from ._validation import (
+    _has_location_source,
+    _resolve_location_source,
+    validate_config_keys,
+    warn_on_tool_choice_not_supported,
+)
 from .model import Model
 
 logger = logging.getLogger(__name__)
@@ -182,8 +187,11 @@ class LlamaAPIModel(Model):
                 if any(block_type in content for block_type in ["toolResult", "toolUse"]):
                     continue
                 if _has_location_source(content):
-                    logger.warning("Location sources are not supported by LlamaAPI | skipping content block")
-                    continue
+                    try:
+                        content = _resolve_location_source(content)
+                    except Exception:
+                        logger.warning("failed to resolve location source for LlamaAPI | skipping content block")
+                        continue
                 filtered_contents.append(content)
 
             formatted_contents: list[dict[str, Any]] | dict[str, Any] | str = ""

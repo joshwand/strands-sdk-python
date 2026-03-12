@@ -19,7 +19,7 @@ from ..types.content import ContentBlock, ContentBlockStartToolUse, Messages
 from ..types.exceptions import ContextWindowOverflowException, ModelThrottledException
 from ..types.streaming import StreamEvent
 from ..types.tools import ToolChoice, ToolSpec
-from ._validation import _has_location_source, validate_config_keys
+from ._validation import _has_location_source, _resolve_location_source, validate_config_keys
 from .model import Model
 
 logger = logging.getLogger(__name__)
@@ -238,10 +238,13 @@ class GeminiModel(Model):
         for message in messages:
             parts = []
             for content in message["content"]:
-                # Check for location sources and skip with warning
+                # Resolve location sources (e.g. S3) to bytes
                 if _has_location_source(content):
-                    logger.warning("Location sources are not supported by Gemini | skipping content block")
-                    continue
+                    try:
+                        content = _resolve_location_source(content)
+                    except Exception:
+                        logger.warning("failed to resolve location source for Gemini | skipping content block")
+                        continue
                 parts.append(self._format_request_content_part(content, tool_use_id_to_name))
 
             contents.append(

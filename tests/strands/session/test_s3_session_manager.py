@@ -13,6 +13,7 @@ from strands.agent.conversation_manager.null_conversation_manager import NullCon
 from strands.session.s3_session_manager import S3SessionManager
 from strands.types.content import ContentBlock
 from strands.types.exceptions import SessionException
+from strands.types.media import DocumentContent, DocumentSource, ImageContent, ImageSource, VideoContent, VideoSource
 from strands.types.session import Session, SessionAgent, SessionMessage, SessionType
 
 
@@ -481,3 +482,207 @@ def test_update_nonexistent_multi_agent(s3_manager, sample_session):
     nonexistent_mock.id = "nonexistent"
     with pytest.raises(SessionException):
         s3_manager.update_multi_agent(sample_session.session_id, nonexistent_mock)
+
+
+def test_create_and_read_message_with_image_bytes(s3_manager, sample_session, sample_agent):
+    """Test creating and reading a message with image bytes through S3."""
+    s3_manager.create_session(sample_session)
+    s3_manager.create_agent(sample_session.session_id, sample_agent)
+
+    image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+    session_message = SessionMessage.from_message(
+        message={
+            "role": "user",
+            "content": [
+                ContentBlock(
+                    image=ImageContent(
+                        format="png",
+                        source=ImageSource(bytes=image_bytes),
+                    )
+                )
+            ],
+        },
+        index=0,
+    )
+
+    s3_manager.create_message(sample_session.session_id, sample_agent.agent_id, session_message)
+    result = s3_manager.read_message(sample_session.session_id, sample_agent.agent_id, 0)
+
+    assert result.message["content"][0]["image"]["source"]["bytes"] == image_bytes
+    assert result.message["content"][0]["image"]["format"] == "png"
+
+
+def test_create_and_read_message_with_document_bytes(s3_manager, sample_session, sample_agent):
+    """Test creating and reading a message with document bytes through S3."""
+    s3_manager.create_session(sample_session)
+    s3_manager.create_agent(sample_session.session_id, sample_agent)
+
+    doc_bytes = b"%PDF-1.4 fake pdf content"
+    session_message = SessionMessage.from_message(
+        message={
+            "role": "user",
+            "content": [
+                ContentBlock(
+                    document=DocumentContent(
+                        format="pdf",
+                        name="test.pdf",
+                        source=DocumentSource(bytes=doc_bytes),
+                    )
+                )
+            ],
+        },
+        index=0,
+    )
+
+    s3_manager.create_message(sample_session.session_id, sample_agent.agent_id, session_message)
+    result = s3_manager.read_message(sample_session.session_id, sample_agent.agent_id, 0)
+
+    assert result.message["content"][0]["document"]["source"]["bytes"] == doc_bytes
+    assert result.message["content"][0]["document"]["format"] == "pdf"
+    assert result.message["content"][0]["document"]["name"] == "test.pdf"
+
+
+def test_create_and_read_message_with_video_bytes(s3_manager, sample_session, sample_agent):
+    """Test creating and reading a message with video bytes through S3."""
+    s3_manager.create_session(sample_session)
+    s3_manager.create_agent(sample_session.session_id, sample_agent)
+
+    video_bytes = b"\x00\x00\x00\x1cftypisom\x00\x00\x02\x00"
+    session_message = SessionMessage.from_message(
+        message={
+            "role": "user",
+            "content": [
+                ContentBlock(
+                    video=VideoContent(
+                        format="mp4",
+                        source=VideoSource(bytes=video_bytes),
+                    )
+                )
+            ],
+        },
+        index=0,
+    )
+
+    s3_manager.create_message(sample_session.session_id, sample_agent.agent_id, session_message)
+    result = s3_manager.read_message(sample_session.session_id, sample_agent.agent_id, 0)
+
+    assert result.message["content"][0]["video"]["source"]["bytes"] == video_bytes
+    assert result.message["content"][0]["video"]["format"] == "mp4"
+
+
+def test_create_and_read_message_with_reasoning_redacted_bytes(s3_manager, sample_session, sample_agent):
+    """Test creating and reading a message with redacted reasoning content bytes through S3."""
+    s3_manager.create_session(sample_session)
+    s3_manager.create_agent(sample_session.session_id, sample_agent)
+
+    redacted_bytes = b"\x01\x02\x03\x04encrypted-reasoning"
+    session_message = SessionMessage.from_message(
+        message={
+            "role": "assistant",
+            "content": [
+                ContentBlock(
+                    reasoningContent={
+                        "redactedContent": redacted_bytes,
+                    }
+                )
+            ],
+        },
+        index=0,
+    )
+
+    s3_manager.create_message(sample_session.session_id, sample_agent.agent_id, session_message)
+    result = s3_manager.read_message(sample_session.session_id, sample_agent.agent_id, 0)
+
+    assert result.message["content"][0]["reasoningContent"]["redactedContent"] == redacted_bytes
+
+
+def test_create_and_read_message_with_mixed_media_bytes(s3_manager, sample_session, sample_agent):
+    """Test creating and reading a message with text, image, document, and video bytes through S3."""
+    s3_manager.create_session(sample_session)
+    s3_manager.create_agent(sample_session.session_id, sample_agent)
+
+    image_bytes = b"\x89PNG-image-data"
+    doc_bytes = b"%PDF-document-data"
+    video_bytes = b"\x00\x00-video-data"
+
+    session_message = SessionMessage.from_message(
+        message={
+            "role": "user",
+            "content": [
+                ContentBlock(text="Here are some files"),
+                ContentBlock(
+                    image=ImageContent(format="jpeg", source=ImageSource(bytes=image_bytes)),
+                ),
+                ContentBlock(
+                    document=DocumentContent(format="txt", name="notes.txt", source=DocumentSource(bytes=doc_bytes)),
+                ),
+                ContentBlock(
+                    video=VideoContent(format="webm", source=VideoSource(bytes=video_bytes)),
+                ),
+            ],
+        },
+        index=0,
+    )
+
+    s3_manager.create_message(sample_session.session_id, sample_agent.agent_id, session_message)
+    result = s3_manager.read_message(sample_session.session_id, sample_agent.agent_id, 0)
+
+    assert result.message["content"][0]["text"] == "Here are some files"
+    assert result.message["content"][1]["image"]["source"]["bytes"] == image_bytes
+    assert result.message["content"][2]["document"]["source"]["bytes"] == doc_bytes
+    assert result.message["content"][3]["video"]["source"]["bytes"] == video_bytes
+
+
+def test_list_messages_with_binary_content(s3_manager, sample_session, sample_agent):
+    """Test listing multiple messages containing binary content through S3."""
+    s3_manager.create_session(sample_session)
+    s3_manager.create_agent(sample_session.session_id, sample_agent)
+
+    for i in range(3):
+        image_bytes = f"image-data-{i}".encode()
+        message = SessionMessage.from_message(
+            message={
+                "role": "user",
+                "content": [
+                    ContentBlock(
+                        image=ImageContent(format="png", source=ImageSource(bytes=image_bytes)),
+                    ),
+                ],
+            },
+            index=i,
+        )
+        s3_manager.create_message(sample_session.session_id, sample_agent.agent_id, message)
+
+    results = s3_manager.list_messages(sample_session.session_id, sample_agent.agent_id)
+
+    assert len(results) == 3
+    for i, result in enumerate(results):
+        expected_bytes = f"image-data-{i}".encode()
+        assert result.message["content"][0]["image"]["source"]["bytes"] == expected_bytes
+
+
+def test_update_message_with_binary_content(s3_manager, sample_session, sample_agent):
+    """Test updating a message with binary content through S3."""
+    s3_manager.create_session(sample_session)
+    s3_manager.create_agent(sample_session.session_id, sample_agent)
+
+    original_bytes = b"original-image-data"
+    session_message = SessionMessage.from_message(
+        message={
+            "role": "user",
+            "content": [
+                ContentBlock(image=ImageContent(format="png", source=ImageSource(bytes=original_bytes))),
+            ],
+        },
+        index=0,
+    )
+    s3_manager.create_message(sample_session.session_id, sample_agent.agent_id, session_message)
+
+    updated_bytes = b"updated-image-data"
+    session_message.message["content"] = [
+        ContentBlock(image=ImageContent(format="jpeg", source=ImageSource(bytes=updated_bytes)))
+    ]
+    s3_manager.update_message(sample_session.session_id, sample_agent.agent_id, session_message)
+
+    result = s3_manager.read_message(sample_session.session_id, sample_agent.agent_id, 0)
+    assert result.message["content"][0]["image"]["source"]["bytes"] == updated_bytes
