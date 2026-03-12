@@ -110,7 +110,7 @@ def _fetch_s3_bytes(uri: str, bucket_owner: str | None = None) -> bytes:
         ValueError: If the URI is not a valid S3 URI.
     """
     if not uri.startswith("s3://"):
-        raise ValueError(f"uri=<{uri}> | invalid S3 URI")
+        raise ValueError(f"uri=<{uri}> | invalid S3 URI, expected s3://bucket/key format")
 
     path = uri[5:]
     slash_idx = path.find("/")

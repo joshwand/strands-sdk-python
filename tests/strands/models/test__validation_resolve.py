@@ -18,19 +18,15 @@ class TestGetS3Client:
         """Test that _get_s3_client returns a boto3 S3 client."""
         import strands.models._validation as mod
 
-        # Reset module-level state
         original_client = mod._s3_client
-        mod._s3_client = None
         try:
-            with patch.object(mod, "_s3_client", None):
-                with patch("boto3.client") as mock_boto3_client:
-                    mock_client = MagicMock()
-                    mock_boto3_client.return_value = mock_client
-                    # Need to also reset the actual global
-                    mod._s3_client = None
-                    result = _get_s3_client()
-                    mock_boto3_client.assert_called_once_with("s3")
-                    assert result is mock_client
+            mod._s3_client = None
+            with patch("boto3.client") as mock_boto3_client:
+                mock_client = MagicMock()
+                mock_boto3_client.return_value = mock_client
+                result = _get_s3_client()
+                mock_boto3_client.assert_called_once_with("s3")
+                assert result is mock_client
         finally:
             mod._s3_client = original_client
 
@@ -72,7 +68,7 @@ class TestFetchS3Bytes:
 
     def test_invalid_uri_not_s3(self):
         """Test that non-S3 URIs raise ValueError."""
-        with pytest.raises(ValueError, match="invalid S3 URI"):
+        with pytest.raises(ValueError, match="invalid S3 URI, expected"):
             _fetch_s3_bytes("https://example.com/image.png")
 
     def test_invalid_uri_missing_key(self):
